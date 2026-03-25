@@ -56,10 +56,13 @@ def compute_val_loss(model, loader, criterion, device, model_name):
             inputs, targets = inputs.to(device), targets.to(device)
 
             if model_name == "BLSTM":
-                # Use only bidirectional logits (fc_gen is intentionally untrained)
-                logits_bi, _, _ = model(inputs)
-                loss = criterion(logits_bi.reshape(-1, logits_bi.size(-1)),
-                                 targets.reshape(-1))
+                # Compute loss on both heads: bidirectional (primary) + forward-only (auxiliary)
+                logits_bi, logits_fwd, _ = model(inputs)
+                loss_bi = criterion(logits_bi.reshape(-1, logits_bi.size(-1)),
+                                    targets.reshape(-1))
+                loss_fwd = criterion(logits_fwd.reshape(-1, logits_fwd.size(-1)),
+                                     targets.reshape(-1))
+                loss = loss_bi + loss_fwd
             else:
                 logits, _ = model(inputs)
                 loss = criterion(logits.reshape(-1, logits.size(-1)),
@@ -125,12 +128,15 @@ def train_model(model_name, vocab, train_dataset, val_dataset, config, device):
             optimizer.zero_grad()
 
             if is_blstm:
-                # BLSTM: only train the bidirectional head (fc)
-                # The forward-only head (fc_gen) is intentionally left untrained
-                # to demonstrate the train/generate mismatch
-                logits_bi, _, _ = model(inputs)
-                loss = criterion(logits_bi.reshape(-1, logits_bi.size(-1)),
-                                 targets.reshape(-1))
+                # Train both heads: bidirectional + forward-only
+                # The forward-only head (fc_fwd) learns to predict from
+                # forward-direction features, enabling generation
+                logits_bi, logits_fwd, _ = model(inputs)
+                loss_bi = criterion(logits_bi.reshape(-1, logits_bi.size(-1)),
+                                    targets.reshape(-1))
+                loss_fwd = criterion(logits_fwd.reshape(-1, logits_fwd.size(-1)),
+                                     targets.reshape(-1))
+                loss = loss_bi + loss_fwd
             else:
                 logits, _ = model(inputs)
                 loss = criterion(logits.reshape(-1, logits.size(-1)),

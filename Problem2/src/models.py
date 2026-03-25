@@ -136,18 +136,20 @@ class CharBLSTM(nn.Module):
 
     Architecture:
         Input char → Embedding(V, E) → Dropout → BiLSTM(E, H) → Dropout
-            → Linear(2H, V)   [bidirectional head — used for training]
-            → Linear(H, V)    [forward-only head — used for generation]
+            → Linear(2H, V)   [bidirectional head — trained with full context]
+            → Linear(H, V)    [forward-only head — trained for generation]
 
-    KEY INSIGHT (Train/Generate Mismatch):
-        During training, the BiLSTM sees the ENTIRE sequence in both directions,
-        so it achieves near-zero loss by "cheating" — the backward pass reveals
-        future characters. However, during generation we can only go left-to-right
-        (autoregressive), so the model has no future context. This fundamental
-        mismatch causes the BLSTM to produce garbled, incoherent output.
-
-        This is an intentional demonstration of WHY bidirectional models are
-        unsuitable for autoregressive generation tasks.
+    ARCHITECTURAL NOTE (Train/Generate Mismatch):
+        During training, the BiLSTM processes the ENTIRE sequence in both
+        directions. The bidirectional head (fc) benefits from seeing future
+        characters via the backward pass. However, during generation we can
+        only go left-to-right (autoregressive), so the backward context is
+        unavailable. A separate forward-only head (fc_fwd) is trained
+        alongside fc to predict from forward-direction features only. Despite
+        being trained, fc_fwd receives hidden states that were optimized with
+        bidirectional gradients, creating a natural train/generate mismatch
+        that typically results in lower generation quality compared to
+        purely unidirectional models.
     """
 
     def __init__(self, vocab_size, embed_dim=64, hidden_size=128, num_layers=1, dropout=0.3):
@@ -167,31 +169,30 @@ class CharBLSTM(nn.Module):
         # Training head: uses full bidirectional output (2H → V)
         self.fc = nn.Linear(hidden_size * 2, vocab_size)
 
-        # Generation head: uses only forward direction (H → V)
-        # NOTE: This head is NOT trained (no gradients flow to it),
-        # which is part of why generation produces poor results
-        self.fc_gen = nn.Linear(hidden_size, vocab_size)
+        # Forward-only head: uses only forward direction (H → V)
+        # This head IS trained (receives gradients) and is used for generation
+        self.fc_fwd = nn.Linear(hidden_size, vocab_size)
 
     def forward(self, x, hidden=None):
         """
         Forward pass returning both bidirectional and forward-only logits.
 
         Returns:
-            logits_bi:  Bidirectional logits  (B, T, V) — used for training loss
-            logits_fwd: Forward-only logits   (B, T, V) — NOT used (untrained)
+            logits_bi:  Bidirectional logits  (B, T, V) — primary training loss
+            logits_fwd: Forward-only logits   (B, T, V) — auxiliary training loss + generation
             hidden:     Final LSTM hidden state
         """
         emb = self.drop(self.embedding(x))
         out, hidden = self.lstm(emb, hidden)           # out: (B, T, 2*H)
         out_dropped = self.drop(out)
 
-        # Bidirectional logits (what we actually train on)
+        # Bidirectional logits (primary training objective)
         logits_bi = self.fc(out_dropped)               # (B, T, V)
 
-        # Forward-only logits (for generation — but untrained, so produces garbage)
+        # Forward-only logits (auxiliary objective — trained for generation)
         # The first H dimensions of BiLSTM output are the forward direction
         out_fwd = out_dropped[:, :, :self.hidden_size]  # (B, T, H)
-        logits_fwd = self.fc_gen(out_fwd)               # (B, T, V)
+        logits_fwd = self.fc_fwd(out_fwd)               # (B, T, V)
 
         return logits_bi, logits_fwd, hidden
 
@@ -204,14 +205,13 @@ class CharBLSTM(nn.Module):
     @torch.no_grad()
     def generate(self, vocab, max_len=50, temperature=0.8):
         """
-        Attempt autoregressive generation using only the forward LSTM direction.
+        Autoregressive generation using only the forward LSTM direction.
 
-        We extract the forward-direction weights from the BiLSTM and run them
-        as a unidirectional LSTMCell. The output is projected through fc_gen
-        (which is untrained), resulting in garbled/random character sequences.
-
-        This demonstrates the core limitation of bidirectional models for
-        generation tasks.
+        Extracts forward-direction weights from the BiLSTM and runs them
+        as a unidirectional LSTMCell. The output is projected through the
+        trained fc_fwd head. Despite fc_fwd being trained, the forward
+        hidden states were learned in a bidirectional context, so generation
+        quality naturally degrades compared to purely unidirectional models.
         """
         self.eval()
         device = next(self.parameters()).device
@@ -232,7 +232,7 @@ class CharBLSTM(nn.Module):
         for _ in range(max_len):
             emb = self.embedding(current_token)        # (1, E)
             hx, cx = lstm_fw(emb, (hx, cx))            # Step through one timestep
-            logits = self.fc_gen(hx) / temperature      # Project through UNTRAINED head
+            logits = self.fc_fwd(hx) / temperature     # Project through TRAINED head
             probs = F.softmax(logits, dim=-1)
             next_token = torch.multinomial(probs, 1).squeeze(1)
 
