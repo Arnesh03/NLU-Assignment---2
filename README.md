@@ -149,18 +149,3 @@ python3 evaluate.py
 
 ---
 
-## 📝 Report
-
-Compile the LaTeX report:
-
-```bash
-pdflatex report.tex    # Combined report (both problems)
-```
-
-Individual reports are also available inside `Problem1/report.tex` and `Problem2/report.tex`.
-
----
-
-## 📄 License
-
-This project is part of academic coursework at IIT Jodhpur. For educational purposes only.
