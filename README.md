@@ -140,12 +140,13 @@ python3 evaluate.py
 
 | Model | Parameters | Novelty | Diversity | Quality |
 |-------|-----------|---------|-----------|---------|
-| VanillaRNN | ~30K | ~95% | ~0.91 | Readable ✓ |
-| BiLSTM | ~330K | ~100% | ~1.00 | Garbled ✗  |
-| **AttentionRNN** | **~105K** | **~95%** | **~0.92** | **Best ✓** |
+| VanillaRNN | 30K | 99.0% | 1.00 | Readable ✓ |
+| CharBLSTM | 212K | 90.0% | 1.00 | Readable (but noisier) ✓ |
+| **AttentionRNN** | **67K** | **91.0%** | **0.99** | **Most Coherent ✓** |
 
-- AttentionRNN produces the most coherent and phonetically realistic Indian names
-- BiLSTM failure demonstrates the train/generate architectural mismatch in bidirectional models
+- **VanillaRNN** provides a strong creative baseline, easily generating the highest percentage of novel names.
+- **AttentionRNN** strikes the best balance: high novelty alongside structural coherence thanks to its Bahdanau attention mechanism keeping long-range dependencies intact. 
+- **CharBLSTM** demonstrates a natural architectural mismatch: because it's trained on bidirectional context but generates autoregressively, its forward-only generation head produces noisier and far more conservative predictions (90% novelty).
 
 ---
 
