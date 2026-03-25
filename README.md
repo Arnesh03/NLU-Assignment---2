@@ -141,7 +141,7 @@ python3 evaluate.py
 | Model | Parameters | Novelty | Diversity | Quality |
 |-------|-----------|---------|-----------|---------|
 | VanillaRNN | ~30K | ~95% | ~0.91 | Readable ✓ |
-| BiLSTM | ~330K | ~100% | ~1.00 | Garbled ✗ (intentional) |
+| BiLSTM | ~330K | ~100% | ~1.00 | Garbled ✗  |
 | **AttentionRNN** | **~105K** | **~95%** | **~0.92** | **Best ✓** |
 
 - AttentionRNN produces the most coherent and phonetically realistic Indian names
