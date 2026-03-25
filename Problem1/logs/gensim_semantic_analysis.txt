@@ -1,0 +1,24 @@
+
+[CBOW (Gensim)] Nearest Neighbors:
+  research     -> supervisor(0.27), landscaping(0.27), identification(0.26), confirmed(0.26), patent(0.25)
+  student      -> students(0.49), semester(0.28), semesters(0.26), include(0.24), sister(0.23)
+  phd          -> sum(0.45), chosen(0.43), signal(0.43), circular_26(0.41), summary(0.39)
+  exam         -> quiz(0.98), hospital(0.64), officer(0.59), missed(0.51), issued(0.46)
+  course       -> courses(0.46), failed(0.29), credits(0.27), competent(0.27), running(0.26)
+
+[CBOW (Gensim)] Analogies:
+  UG : BTech :: PG : ? -> vocab(0.71), pgs(0.44), senateresults(0.38)
+  student : exam :: faculty : ? -> quiz(0.48), issued(0.35), non-degree(0.32)
+  research : PhD :: teaching : ? -> circular_29(0.32), scheduling(0.31), suggested(0.31)
+
+[Skip-gram (Gensim)] Nearest Neighbors:
+  research     -> proposal(0.49), worth(0.45), platforms(0.42), landscaping(0.42), patent(0.41)
+  student      -> respectively(0.35), outstanding(0.34), bonafide(0.34), excellent(0.34), monitor(0.33)
+  phd          -> existing(0.61), admit(0.61), mtech(0.57), msc(0.54), mo(0.47)
+  exam         -> quiz(0.95), officer(0.65), hospital(0.65), treatment(0.64), endorsement(0.61)
+  course       -> competent(0.43), mechanics(0.42), authority(0.42), elective(0.41), mel1xx0(0.40)
+
+[Skip-gram (Gensim)] Analogies:
+  UG : BTech :: PG : ? -> vocab(0.74), reservation(0.60), senateresults(0.58)
+  student : exam :: faculty : ? -> quiz(0.59), expertise(0.50), undertook(0.46)
+  research : PhD :: teaching : ? -> circular_29(0.51), msc(0.49), mtech(0.47)

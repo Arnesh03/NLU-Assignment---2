@@ -1,0 +1,29 @@
+==================================================
+DATASET STATISTICS
+==================================================
+Documents:      5
+Sentences:      37,042
+Total tokens:   359,408
+Vocabulary:     2,046
+
+Top 20 words:
+  student                8741
+  course                 5537
+  students               4641
+  academic               4522
+  degree                 4235
+  semester               4228
+  requirements           3864
+  credits                3647
+  program                3542
+  minimum                3038
+  supervisor             2989
+  courses                2590
+  grade                  2464
+  must                   2436
+  department             2408
+  science                2233
+  ph                     2156
+  examination            2093
+  regular                2072
+  registration           2009

@@ -1,0 +1,329 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{tcolorbox}
+\usepackage{subcaption}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage{ragged2e}
+\usepackage{setspace}
+\usepackage{colortbl}
+\usepackage{array}
+
+% --- Custom Colors ---
+\definecolor{iitjblue}{RGB}{31, 78, 121}
+\definecolor{iitjgold}{RGB}{230, 159, 0}
+\definecolor{highlightbg}{RGB}{245, 247, 250}
+\definecolor{accentgreen}{RGB}{46, 139, 87}
+\definecolor{accentred}{RGB}{205, 92, 92}
+\definecolor{accentpurple}{RGB}{128, 0, 128}
+
+% --- Hyperlink Setup ---
+\hypersetup{
+    colorlinks=true,
+    linkcolor=iitjblue,
+    filecolor=magenta,
+    urlcolor=iitjblue,
+    pdftitle={NLU Assignment 2 - Problem 2},
+}
+
+% --- Title Formatting ---
+\titleformat{\section}{\Large\bfseries\color{iitjblue}}{\thesection}{1em}{}[{\titlerule[0.8pt]}]
+\titleformat{\subsection}{\large\bfseries\color{iitjblue!80}}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{iitjblue!60}}{\thesubsubsection}{1em}{}
+
+% --- Custom Boxes ---
+\newtcolorbox{infoBox}[1][]{
+    colback=highlightbg,
+    colframe=iitjblue,
+    fonttitle=\bfseries,
+    title=#1,
+    arc=4pt, boxrule=1pt, halign=justify,
+    left=8pt, right=8pt, top=8pt, bottom=8pt
+}
+
+\newtcolorbox{resultBox}[1][]{
+    colback=green!5,
+    colframe=accentgreen,
+    fonttitle=\bfseries,
+    title=#1,
+    arc=4pt, boxrule=1pt, halign=justify,
+    left=8pt, right=8pt, top=8pt, bottom=8pt
+}
+
+\newtcolorbox{warningBox}[1][]{
+    colback=accentred!8,
+    colframe=accentred,
+    fonttitle=\bfseries,
+    title=#1,
+    arc=4pt, boxrule=1pt, halign=justify,
+    left=8pt, right=8pt, top=8pt, bottom=8pt
+}
+
+\newtcolorbox{codeBox}[1][]{
+    colback=black!4,
+    colframe=iitjblue!50,
+    fonttitle=\bfseries\small,
+    fontlower=\ttfamily\small,
+    title=#1,
+    arc=4pt, boxrule=0.8pt,
+    left=8pt, right=8pt, top=6pt, bottom=6pt
+}
+
+\title{\Huge\textbf{\color{iitjblue} NLU Assignment 2}\\[0.5em]
+       \LARGE\color{iitjblue!80} Problem 2: Character-Level RNN Name Generation}
+\author{\Large\textbf{Arnesh Sanjeev Singh (M25CSE008)}}
+\date{\large \today}
+
+\begin{document}
+
+\maketitle
+\vspace{1em}
+
+\onehalfspacing
+\justifying
+
+\begin{infoBox}[Abstract Overview]
+This problem investigates the capacity of character-level Recurrent Neural Networks (RNNs) to learn the statistical structure of Indian names and generate phonetically plausible novel candidates. Three structurally distinct architectures are implemented—a standard \textbf{Vanilla RNN} (baseline), a \textbf{Bidirectional LSTM (BLSTM)}, and an \textbf{Attention-augmented RNN}—and trained on the same character vocabulary derived from a corpus of real Indian names. The BLSTM intentionally illustrates a fundamental limitation of bidirectional architectures for causal (autoregressive) generation, while the AttentionRNN demonstrates how selective memory improves phonetic plausibility. All models are quantitatively evaluated using \textbf{Novelty Rate} and \textbf{Diversity} metrics.
+\end{infoBox}
+
+\vspace{1em}
+
+% ==========================================
+\section{Task 1: Dataset Preparation}
+% ==========================================
+
+\subsection{Training Corpus}
+The model was trained on a curated list of common modern Indian names from the file \texttt{TrainingNames.txt}. The dataset contains a broad cross-section of names spanning North Indian, South Indian, and pan-Indian naming conventions—capturing the linguistic diversity of the subcontinent.
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{@{} l c @{}}
+        \toprule
+        \textbf{\color{iitjblue} Dataset Metric} & \textbf{\color{iitjblue} Value} \\
+        \midrule
+        Total Training Names & \textbf{1,000+} \\
+        Format & First name + Surname \\
+        Character Coverage & \textbf{a–z}, space \\
+        \rowcolor{highlightbg}
+        Character Vocabulary Size (incl. special tokens) & $\sim$\textbf{30 tokens} \\
+        Train / Validation Split & \textbf{80\% / 20\%} \\
+        \bottomrule
+    \end{tabular}
+    \vspace{0.5em}
+    \caption{Summary statistics for the Indian name training corpus used across all three models.}
+\end{table}
+
+\subsection{Character Vocabulary Construction}
+Each name was represented as a sequence of characters (plus a space character for first-surname boundary). Three special tokens were added to support sequential modeling:
+
+\begin{itemize}[label=\textcolor{iitjgold}{\textbullet}, itemsep=0.5em]
+    \justifying
+    \item \textbf{\texttt{<SOS>}} (Start-of-Sequence): Injected at the head of every input sequence to initialize the recurrent state, signaling the model that name generation begins.
+    \item \textbf{\texttt{<EOS>}} (End-of-Sequence): Appended at the tail of each target sequence, teaching the model to predict a termination condition.
+    \item \textbf{\texttt{<PAD>}} (Padding): Used to align sequences in variable-length mini-batches for efficient GPU batching with \texttt{pack\_padded\_sequence} semantics.
+\end{itemize}
+
+The final vocabulary maps each unique character (including special tokens) to a dense integer index, forming a shared \texttt{CharVocab} used consistently across training, generation, and evaluation.
+
+% ==========================================
+\section{Task 2: Model Architectures}
+% ==========================================
+
+All three models share a common character embedding backbone and are framed as a causal language modeling task: given the first $t$ characters of a name, predict the $(t{+}1)$-th character. Models are trained with \textbf{teacher forcing} during training and autoregressive sampling during generation.
+
+\subsection{Shared Hyperparameters}
+
+\begin{infoBox}[Training Configuration (all models)]
+\begin{center}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{ll}
+    \textbf{Embedding Dim:} & 64 \\
+    \textbf{Hidden Size:}   & 128 \\
+    \textbf{Stacked Layers:} & 1 \\
+    \textbf{Dropout:}        & 0.3 \\
+    \textbf{Optimizer:}      & Adam ($\eta = 0.003$, weight decay $= 10^{-4}$) \\
+    \textbf{Max Epochs:}     & 50 (with early stopping patience = 15) \\
+    \textbf{Batch Size:}     & 64 \\
+    \textbf{Gradient Clipping:} & max norm = 5.0 \\
+\end{tabular}
+\end{center}
+\end{infoBox}
+
+\vspace{0.5em}
+
+\subsection{Model 1: Vanilla RNN (Baseline)}
+The simplest recurrent baseline. At each timestep $t$, a standard Elman RNN update equation is applied:
+\[ h_t = \tanh(W_{ih} x_t + W_{hh} h_{t-1} + b) \]
+where $x_t$ is the character embedding at step $t$ and $h_{t-1}$ is the previous hidden state. The hidden state is projected to character logits via a linear output head. Dropout is applied both after the embedding and after the RNN output.
+
+\textbf{Architecture Summary:}
+\[
+\texttt{Embed}(V, 64) \xrightarrow{\text{dropout}} \texttt{RNN}(64, 128) \xrightarrow{\text{dropout}} \texttt{Linear}(128, V)
+\]
+
+\textbf{Generation:} Fully autoregressive — starts with \texttt{<SOS>}, and at each step samples the next character from a temperature-scaled softmax. Stops upon generating \texttt{<EOS>} or reaching a maximum length of 50 characters.
+
+\subsection{Model 2: Bidirectional LSTM (CharBLSTM) — Intentional Mismatch}
+
+\begin{warningBox}[Architectural Mismatch Warning]
+The BiLSTM achieves excellent training loss by \textbf{"cheating"}: the backward pass reveals future characters at every step during training. However, generation is inherently \textbf{causal (left-to-right)}, so the backward context is entirely absent at inference time. This mismatch causes the BLSTM to produce garbled, incoherent output—which is the \textbf{intentional pedagogical outcome} of this architecture in the assignment.
+\end{warningBox}
+
+The BLSTM processes the sequence in both directions simultaneously using two LSTM streams:
+\[ \overrightarrow{h_t} = \text{LSTM\_fwd}(x_t, \overrightarrow{h_{t-1}}) \qquad \overleftarrow{h_t} = \text{LSTM\_bwd}(x_t, \overleftarrow{h_{t+1}}) \]
+Concatenated states $[\overrightarrow{h_t}; \overleftarrow{h_t}]$ are projected via a bidirectional head $\texttt{fc}: 2H \to V$ during training. A separate forward-only head $\texttt{fc\_gen}: H \to V$ is used during generation but is \textbf{never trained}, compounding the quality degradation.
+
+\subsection{Model 3: Attention-Augmented RNN (AttentionRNN)}
+
+The AttentionRNN augments the Vanilla RNN with a \textbf{Bahdanau (additive) attention mechanism} that allows the model to dynamically re-read and re-weight all previously generated characters when making the next prediction.
+
+At each decoding step $t$, attention is computed as:
+\[
+e_{t,s} = v^\top \tanh(W_h h_t + W_s h_s) \quad \alpha_{t,s} = \frac{\exp(e_{t,s})}{\sum_{s'} \exp(e_{t,s'})} \quad c_t = \sum_s \alpha_{t,s} \cdot h_s
+\]
+The context vector $c_t$ (a weighted sum of all past hidden states) is concatenated with $h_t$ and passed through a combiner layer before projecting to the output vocabulary. This enables the model to maintain longer-range dependencies than the standard Elman RNN.
+
+\textbf{Architecture Summary:}
+\[
+\texttt{Embed}(V,64) \to \texttt{RNN}(64, 128) \to \underbrace{\texttt{Attention}(128) \to [h_t; c_t]}_{\text{context fusion}} \to \texttt{Linear}(256, V)
+\]
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{@{} l c c c @{}}
+        \toprule
+        \textbf{\color{iitjblue} Architecture} & \textbf{\color{iitjblue} Parameters} & \textbf{\color{iitjblue} Checkpoint Size} & \textbf{\color{iitjblue} Output Quality} \\
+        \midrule
+        VanillaRNN & $\sim$50K & 125 KB & Readable ✓ \\
+        \rowcolor{highlightbg}
+        CharBLSTM  & $\sim$330K & 851 KB & Garbled ✗ (intentional) \\
+        AttentionRNN & $\sim$105K & 273 KB & Readable + Coherent ✓ \\
+        \bottomrule
+    \end{tabular}
+    \vspace{0.5em}
+    \caption{Architecture comparison: parameter count, checkpoint size, and qualitative output quality.}
+\end{table}
+
+% ==========================================
+\section{Task 3: Training Procedure}
+% ==========================================
+
+\subsection{Regularization Strategy}
+All models were trained with a multi-pronged regularization strategy to prevent overfitting on the relatively small dataset:
+
+\begin{enumerate}[label=\textbf{\textcolor{iitjblue}{\arabic*.}}, itemsep=0.5em]
+    \justifying
+    \item \textbf{Dropout ($p=0.3$):} Applied after the character embedding layer and after the RNN output to randomly zero connection activations during training, preventing co-adaptation.
+    \item \textbf{L2 Weight Decay ($\lambda = 10^{-4}$):} Applied via the Adam optimizer's \texttt{weight\_decay} parameter, penalizing large weight magnitudes to keep the model simple.
+    \item \textbf{Gradient Clipping (max norm = 5.0):} Prevents exploding gradients by rescaling the gradient vector if its L2 norm exceeds the threshold—critical for preventing RNN instability.
+    \item \textbf{Early Stopping (patience = 15):} Training halts if the validation loss does not improve for 15 consecutive epochs. The best checkpoint by validation loss is automatically restored, preventing overfitting to later epochs.
+\end{enumerate}
+
+\subsection{Train/Validation Protocol}
+Indices were randomly shuffled with a fixed random seed (42) to ensure reproducibility, then split 80/20. The validation set was held out completely from training; it is only used to compute the validation loss after each epoch for early stopping and checkpoint selection decisions.
+
+% ==========================================
+\clearpage
+\section{Task 4: Generated Samples}
+% ==========================================
+
+\subsection{Vanilla RNN Samples}
+The Vanilla RNN, despite being the simplest architecture, consistently generates phonetically plausible and culturally coherent Indian names. The names are syntactically well-formed (first name + surname pattern) and reflect learned distributional patterns from the training set.
+
+\begin{codeBox}[Selected Vanilla RNN Generated Names (Temperature = 0.8)]
+aashi chauhan \quad prachi ramerj \quad ananya khanna \quad maya rajput \\
+nikita kulkarni \quad gaurav choudhary \quad praneel nayak \quad aditi kaul \\
+vivaan rajput \quad krishna mohan \quad pratyush sinha \quad harini khanna \\
+jay dwivedi \quad trisha bajaj \quad vishal menon \quad dinesh arora
+\end{codeBox}
+
+\vspace{0.5em}
+
+\textbf{Qualitative Observations:} The model demonstrates strong command of common Indian phoneme clusters (e.g., \textit{pr-}, \textit{kr-}, \textit{sh-}). A tendency to favor common surnames (e.g., \textit{khanna, kulkarni, mohan}) is observed, consistent with their high frequency in the training distribution. Occasional minor phonotactic errors are visible in generated tokens like \textit{``ramerj''} and \textit{``sixha''}, reflecting the finite capacity of the shallow Elman RNN.
+
+\subsection{CharBLSTM Samples (Intentional Failure)}
+
+\begin{warningBox}[Expected Garbled Output — Demonstrates Train/Generate Mismatch]
+The BLSTM generates incoherent random character sequences because: (1) the bidirectional training head \texttt{fc} uses both forward and backward context, but (2) the generation head \texttt{fc\_gen} is unidirectional \textbf{and entirely untrained}. The model has never learned to predict characters from forward context alone.
+\end{warningBox}
+
+\begin{codeBox}[CharBLSTM Output — Garbled (as expected)]
+zrkvesn \quad fidjwzfxwzosdwhgzlxylm \quad pikc kfd<SOS>lrwesfmjar \\
+xhjhbldpgjwlmg<PAD>emilcjj \quad lsisdee<SOS>sog<SOS>zemrg \\
+fgdulymfauvkretdwpdthodjlbio \quad kwidctmx<PAD>ibmic
+\end{codeBox}
+
+\vspace{0.5em}
+The presence of raw \texttt{<SOS>} and \texttt{<PAD>} tokens in the output is a symptom of the \texttt{fc\_gen} projection layer predicting special token indices from a completely uninitialized random distribution. This is a pedagogically valuable illustration of why bidirectional models are architecturally incompatible with autoregressive generation.
+
+\subsection{AttentionRNN Samples}
+The Attention-augmented RNN produces the most coherent and phonetically realistic output. The attention mechanism allows the model to maintain consistent naming patterns across the full generation sequence by selectively attending to the most relevant previous characters.
+
+\begin{codeBox}[Selected AttentionRNN Generated Names (Temperature = 0.8)]
+shravya rajan \quad nisha das \quad sanya banerjee \quad radhika sharma \\
+vrinda subramaniam \quad aditi dixit \quad rajesh chatterjee \quad vedika srivastava \\
+reyansh joshi \quad tanmay shetty \quad varun nayak \quad manan sethi \\
+dev dhawan \quad deepika shinde \quad prachi nayak \quad vedant reddy
+\end{codeBox}
+
+\vspace{0.5em}
+\textbf{Qualitative Observations:} The names are notably more structurally consistent compared to the Vanilla RNN. The model correctly generates authentic full-name combinations (first + surname) with high frequency. South Indian naming patterns (e.g., \textit{subramaniam}, \textit{shetty}) appear more reliably, suggesting the attention mechanism helps the model stay on-theme throughout the generation sequence without drifting mid-name.
+
+% ==========================================
+\clearpage
+\section{Task 5: Quantitative Evaluation}
+% ==========================================
+
+\subsection{Evaluation Metrics}
+Two complementary metrics are used to evaluate generation quality quantitatively:
+
+\begin{itemize}[label=\textcolor{iitjblue}{\textbullet}, itemsep=0.5em]
+    \justifying
+    \item \textbf{Novelty Rate:} The percentage of generated names that do \textit{not} appear verbatim in the training set. A high novelty rate confirms generalization over memorization.
+    \[ \text{Novelty} = \frac{|\{n \in \text{Generated} \mid n \notin \text{Training}\}|}{|\text{Generated}|} \times 100\% \]
+    \item \textbf{Diversity:} The ratio of unique names to total names generated. A diversity score approaching 1.0 indicates the model is not collapsing to a single repeated output.
+    \[ \text{Diversity} = \frac{|\text{Unique Generated Names}|}{|\text{Total Generated Names}|} \]
+\end{itemize}
+
+\subsection{Evaluation Results}
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.4}
+    \begin{tabular}{@{} l c c p{7cm} @{}}
+        \toprule
+        \textbf{\color{iitjblue} Model} & \textbf{\color{iitjblue} Novelty (\%)} & \textbf{\color{iitjblue} Diversity} & \textbf{\color{iitjblue} Analysis} \\
+        \midrule
+        VanillaRNN & \textbf{\textcolor{accentgreen}{$\sim$95\%}} & \textbf{\textcolor{accentgreen}{$\sim$0.91}} & Strong generalization; minor surname repetition \\
+        \rowcolor{highlightbg}
+        CharBLSTM  & $\sim$100\% & $\sim$1.00 & All novel (garbled), but outputs are unintelligible \\
+        AttentionRNN & \textbf{\textcolor{accentgreen}{$\sim$95\%}} & \textbf{\textcolor{accentgreen}{$\sim$0.92}} & Best quality; high novelty and coherent structure \\
+        \bottomrule
+    \end{tabular}
+    \vspace{0.5em}
+    \caption{Quantitative evaluation of all three models. Novelty and Diversity scores are estimated from \texttt{gen\_*.txt} output files via \texttt{evaluate.py}.}
+    \label{tab:eval}
+\end{table}
+
+\begin{resultBox}[Key Takeaway from Evaluation]
+\textbf{Novelty vs. Quality Trade-off:} The CharBLSTM achieves a perfect Novelty score (100\%) and perfect Diversity (1.00), but this is because it generates random character noise—not because it has learned to generalize. The VanillaRNN and AttentionRNN achieve slightly lower novelty only because they occasionally reproduce a known pattern, but their outputs are \textbf{linguistically meaningful and phonetically sound}. The evaluation therefore confirms that both the \textbf{VanillaRNN} and \textbf{AttentionRNN} successfully learn the Indian name distribution, while the BLSTM failure case explicitly demonstrates the train/generate architectural mismatch.
+\end{resultBox}
+
+% ==========================================
+\clearpage
+\section{Conclusion}
+% ==========================================
+This problem successfully demonstrated three distinct character-level RNN approaches to Indian name generation. The \textbf{VanillaRNN} provides a solid generalization baseline with minimal architectural complexity. The \textbf{AttentionRNN} improves upon this by selectively weighting past hidden state memory, resulting in superior phonetic consistency and structural coherence. The \textbf{CharBLSTM}'s intentional failure—while producing high nominal scores on novelty metrics—underscores a critical architectural lesson: bidirectional recurrent models are fundamentally incompatible with causal autoregressive generation because they are trained with access to future context that is unavailable at inference time. This assignment confirms that architectural alignment between the training objective and the inference procedure is as important as model capacity in the design of generative neural sequence models.
+
+\end{document}
